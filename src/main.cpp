@@ -91,15 +91,72 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double steering = j[1]["steering_angle"];
+          double throttle = j[1]["throttle"];
+          const double Lf=2.67;
 
           /*
-          * TODO: Calculate steering angle and throttle using MPC.
+           * Convert waypoints to the car reference system; i.e. car in (0,0,0), with x
+           * axis oriented as the car heading.
+           */
+
+          for (auto i=0u; i<ptsx.size(); ++i) {
+        	  // Translate first
+        	  ptsx[i]-=px;
+        	  ptsy[i]-=py;
+        	  // Then rotate
+        	  auto xRotated = ptsx[i]*cos(-psi)-ptsy[i]*sin(-psi);
+        	  auto yRotated = ptsx[i]*sin(-psi)+ptsy[i]*cos(-psi);
+        	  ptsx[i]=xRotated;
+        	  ptsy[i]=yRotated;
+          }
+
+          // Interpolate the waypoints with a polynomial and get the coefficients of the result
+          Eigen::Map<Eigen::VectorXd> xWaypoints(&ptsx[0], ptsx.size());
+          Eigen::Map<Eigen::VectorXd> yWaypoints(&ptsy[1], ptsy.size());
+          auto coeffs = polyfit(xWaypoints, yWaypoints, 3);
+
+          // Determine errors and state vector
+          auto cte = polyeval(coeffs, 0);  // Approximation, but good enough
+          auto epsy = -atan(coeffs[1]);
+          Eigen::VectorXd state {6};
+          state << 0, 0, 0, v, cte, epsy;
+
+          // Run the optimisation given the state vector and polynomial interpolation coefficients
+          auto optResult = mpc.Solve(state, coeffs);
+
+          /*
+           * Fill in information to allow the simulator to draw the polynomial interpolating
+           * the waypoints.
+           */
+          vector<double> xTrack;
+          vector<double> yTrack;
+          double trackSpacing=2.5;
+          int numTrackPoints=25;
+          for (auto i=1; i< numTrackPoints; ++i) {
+        	  auto x = i*trackSpacing;
+        	  xTrack.push_back(x);
+        	  yTrack.push_back(polyeval(coeffs, x));
+          }
+
+          // Fill in computation output to be sent to the simulator
+          vector<double> x;
+          vector<double> y;
+          for (auto i=2; i<optResult.size(); ++i) {
+        	  if (i%2==0) x.push_back(optResult[i]);
+        	  else y.push_back(optResult[i]);
+          }
+
+
+
+          /*
+          * DONE: Calculate steering angle and throttle using MPC.
           *
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+          double steer_value=optResult[0]/(deg2rad(25)*Lf);
+          double throttle_value= optResult[1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -108,24 +165,24 @@ int main() {
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
+          //vector<double> mpc_x_vals;
+          //vector<double> mpc_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
 
-          msgJson["mpc_x"] = mpc_x_vals;
-          msgJson["mpc_y"] = mpc_y_vals;
+          msgJson["mpc_x"] = x;
+          msgJson["mpc_y"] = y;
 
           //Display the waypoints/reference line
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
+          // vector<double> next_x_vals;
+          // vector<double> next_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
-          msgJson["next_x"] = next_x_vals;
-          msgJson["next_y"] = next_y_vals;
+          msgJson["next_x"] = xTrack;
+          msgJson["next_y"] = yTrack;
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
@@ -139,7 +196,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          // this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
