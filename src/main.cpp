@@ -91,8 +91,9 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-          double steering = j[1]["steering_angle"];
-          double throttle = j[1]["throttle"];
+          // TODO use the two variables below to handle delay
+          // double steering = j[1]["steering_angle"];
+          // double throttle = j[1]["throttle"];
           const double Lf=2.67;
 
           /*
@@ -113,7 +114,7 @@ int main() {
 
           // Interpolate the waypoints with a polynomial and get the coefficients of the result
           Eigen::Map<Eigen::VectorXd> xWaypoints(&ptsx[0], ptsx.size());
-          Eigen::Map<Eigen::VectorXd> yWaypoints(&ptsy[1], ptsy.size());
+          Eigen::Map<Eigen::VectorXd> yWaypoints(&ptsy[0], ptsy.size());
           auto coeffs = polyfit(xWaypoints, yWaypoints, 3);
 
           // Determine errors and state vector
@@ -142,7 +143,7 @@ int main() {
           // Fill in computation output to be sent to the simulator
           vector<double> x;
           vector<double> y;
-          for (auto i=2; i<optResult.size(); ++i) {
+          for (auto i=2u; i<optResult.size(); ++i) {
         	  if (i%2==0) x.push_back(optResult[i]);
         	  else y.push_back(optResult[i]);
           }
@@ -155,8 +156,10 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value=optResult[0]/(deg2rad(25)*Lf);
+          double steer_value=-optResult[0]/(deg2rad(25)*Lf);  // TODO check the sign here!
+          assert(steer_value>=-1 && steer_value<=1);
           double throttle_value= optResult[1];
+          assert(throttle_value>=-1 && throttle_value<=1);
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.

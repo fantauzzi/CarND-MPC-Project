@@ -44,29 +44,27 @@ public:
 
 	typedef CPPAD_TESTVECTOR(AD<double>)ADvector;
 	void operator()(ADvector& fg, const ADvector& vars) {
-		// TODO: implement MPC
+		// DONE: implement MPC
 		// `fg` a vector of the cost constraints, `vars` is a vector of variable values (state & actuators)
-		// NOTE: You'll probably go back and forth between this function and
-		// the Solver function below.
 		fg[0] = 0;
 
 		// The part of the cost based on the reference state.
-		for (auto t = 0u; t < N; t++) {
-			fg[0] += CppAD::pow(vars[cteStart + t], 2);
-			fg[0] += CppAD::pow(vars[epsiStart + t], 2);
-			fg[0] += CppAD::pow(vars[vStart + t] - refV, 2);
+		for (auto i = 0u; i < N; i++) {
+			fg[0] += 2000*CppAD::pow(vars[cteStart + i]-refCte, 2);
+			fg[0] += 2000*CppAD::pow(vars[epsiStart + i]-refEpsi, 2);
+			fg[0] += CppAD::pow(vars[vStart + i] - refV, 2);
 		}
 
 		// Minimize the use of actuators.
-		for (auto t = 0u; t < N - 1; t++) {
-			fg[0] += CppAD::pow(vars[deltaStart + t], 2);
-			fg[0] += CppAD::pow(vars[aStart + t], 2);
+		for (auto i = 0u; i < N - 1; i++) {
+			fg[0] += 5*CppAD::pow(vars[deltaStart + i], 2);
+			fg[0] += 5*CppAD::pow(vars[aStart + i], 2);
 		}
 
 		// Minimize the value gap between sequential actuations.
-		for (auto t = 0u; t < N - 2; t++) {
-			fg[0] += CppAD::pow(vars[deltaStart + t + 1] - vars[deltaStart + t], 2);
-			fg[0] += CppAD::pow(vars[aStart + t + 1] - vars[aStart + t], 2);
+		for (auto i = 0u; i < N - 2; i++) {
+			fg[0] += 200*CppAD::pow(vars[deltaStart + i + 1] - vars[deltaStart + i], 2);
+			fg[0] += 10*CppAD::pow(vars[aStart + i + 1] - vars[aStart + i], 2);
 		}
 
 		// Initial constraints
@@ -102,8 +100,8 @@ public:
 			AD<double> delta0 = vars[deltaStart + i - 1];
 			AD<double> a0 = vars[aStart + i - 1];
 
-			AD<double> f0 = coeffs[0] + coeffs[1] * x0;
-			AD<double> psides0 = CppAD::atan(coeffs[1]);
+			AD<double> f0 = coeffs[0] + coeffs[1] * x0+coeffs[2]*x0*x0+coeffs[3]*x0*x0*x0;
+			AD<double> psides0 = CppAD::atan(3*coeffs[3]*x0*x0+2*coeffs[2]*x0+coeffs[1]);
 
 			// Recall the equations for the model:
 			// x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
