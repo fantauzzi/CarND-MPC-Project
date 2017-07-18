@@ -112,12 +112,12 @@ public:
 			// epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
 			fg[1 + xStart + i] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
 			fg[1 + yStart + i] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-			fg[1 + psiStart + i] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
+			fg[1 + psiStart + i] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
 			fg[1 + vStart + i] = v1 - (v0 + a0 * dt);
 			fg[1 + cteStart + i] =
 			cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
 			fg[1 + epsiStart + i] =
-			epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+			epsi1 - ((psi0 - psides0) - v0 * delta0 / Lf * dt);
 		}
 	}
 };
@@ -131,7 +131,7 @@ MPC::~MPC() {
 }
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
-	bool ok = true;
+	//bool ok = true;
 	// size_t i;
 	typedef CPPAD_TESTVECTOR(double)Dvector;
 
@@ -173,8 +173,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 	  // degrees (values in radians).
 	  // NOTE: Feel free to change this to something else.
 	  for (auto i = deltaStart; i < aStart; i++) {
-	    vars_lowerbound[i] = -0.436332*Lf;  // TODO check
-	    vars_upperbound[i] = 0.436332*Lf;  // TODO check
+	    vars_lowerbound[i] = -0.436332*Lf;  // TODO check, do I need the Lf factor?
+	    vars_upperbound[i] = 0.436332*Lf;  // TODO check, do I need the Lf factor?
 	  }
 
 	  // Acceleration/deceleration upper and lower limits.
@@ -237,11 +237,11 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 			fg_eval, solution);
 
 	// Check some of the solution values
-	ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
+	//ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
 
 	// Cost
-	auto cost = solution.obj_value;
-	std::cout << "Cost " << cost << std::endl;
+	// auto cost = solution.obj_value;
+	// std::cout << "Cost " << cost << std::endl;
 
 	// TODO: Return the first actuator values. The variables can be accessed with
 	// `solution.x[i]`.
