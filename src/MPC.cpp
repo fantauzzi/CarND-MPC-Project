@@ -7,7 +7,7 @@ using CppAD::AD;
 
 // TODO: Set the timestep length and duration
 constexpr size_t N = 10;
-constexpr double dt = .1;
+constexpr double dt = .15;
 
 // This value assumes the model presented in the classroom is used.
 //
