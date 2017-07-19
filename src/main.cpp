@@ -156,9 +156,6 @@ int main() {
 	constexpr unsigned latency {100}; // Latency in milliseconds
 	const double Lf=mpc.getLf();
 
-	//long long timeStamp { getCurrentTimestamp() };  // Time stamp of the last
-	// double vPrevious { 0. };
-
 	h.onMessage(
 			[&mpc, &latency, &Lf](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
 					uWS::OpCode opCode) {
@@ -187,19 +184,6 @@ int main() {
 							// Convert speed from mph to meters/second (International System of Units)
 							const double vISU=v*mph2ISU;
 
-							//double deltaT= (getCurrentTimestamp()- timeStamp)/1000.;
-							//timeStamp=getCurrentTimestamp();
-							// double accel=(vISU-vPrevious)/deltaT;
-							//double accel=.0;
-							//vPrevious=vIS;
-
-							// DONE use the two variables below to handle delay
-							// cout << "Steering=" << steeringAngle << endl;
-							// cout << "mph=" << v << "m/s=" << vIS << endl;
-							// double throttle = j[1]["throttle"];
-							//auto pxPred = px+(vIS*latency/1000.+.5*accel*pow(latency/1000.,2)) * cos(psi);
-							//auto pyPred = py+vIS*latency/1000.+.5*accel*pow(latency/1000.,2)) * sin(psi);
-
 							/*
 							 * Predict the car pose at the end of the latency time interval. Approximate
 							 * the prediction by assuming that the car speed and steering angle are constant
@@ -208,8 +192,6 @@ int main() {
 							auto pxPred = px+vISU*latency/1000. * cos(psi);
 							auto pyPred = py+vISU*latency/1000.* sin(psi);
 							auto psiPred=psi + (v/Lf)*steeringAngleRad*latency/1000.;
-							// cout << "Psi=" << rad2deg(psi) << " psiPred=" << rad2deg(psiPred) << endl;
-							//auto vPred=vISU+accel*latency/1000.;
 
 							/*
 							 * Convert the waypoints (received from the simulator) to the car reference system, as
@@ -301,9 +283,6 @@ int main() {
 							//
 							// Feel free to play around with this value but should be to drive
 							// around the track with 100ms latency.
-							//
-							// NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
-							// SUBMITTING.
 							this_thread::sleep_for(chrono::milliseconds(latency));
 							ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 						}
