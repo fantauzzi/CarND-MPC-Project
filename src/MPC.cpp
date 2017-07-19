@@ -6,8 +6,8 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-constexpr size_t N = 10;
-constexpr double dt = .15;
+constexpr size_t N =11;
+constexpr double dt = .13;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -52,7 +52,7 @@ public:
 		for (auto i = 0u; i < N; i++) {
 			fg[0] += 2000*CppAD::pow(vars[cteStart + i]-refCte, 2);
 			fg[0] += 2000*CppAD::pow(vars[epsiStart + i]-refEpsi, 2);
-			fg[0] += CppAD::pow(vars[vStart + i] - refV, 2);
+			fg[0] += 1.5*CppAD::pow(vars[vStart + i] - refV, 2);
 		}
 
 		// Minimize the use of actuators.
@@ -127,6 +127,11 @@ public:
 //
 MPC::MPC() {
 }
+
+double MPC::getLf() const {
+	return 2.67;
+}
+
 MPC::~MPC() {
 }
 

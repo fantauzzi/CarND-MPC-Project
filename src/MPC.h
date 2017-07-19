@@ -9,6 +9,7 @@ using namespace std;
 class MPC {
  public:
   MPC();
+  virtual double getLf() const;
 
   virtual ~MPC();
 
