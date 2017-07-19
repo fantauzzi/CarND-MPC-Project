@@ -5,7 +5,7 @@
 
 using CppAD::AD;
 
-// TODO: Set the timestep length and duration
+// DONE: Set the timestep length and duration
 constexpr size_t N =11;
 constexpr double dt = .13;
 
