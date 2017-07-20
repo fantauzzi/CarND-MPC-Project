@@ -13,6 +13,7 @@
 
 // for convenience
 using json = nlohmann::json;
+using namespace std;
 
 constexpr double mph2ISU = 1609.344 / 3600; // Factor for conversion from mph to meters/second
 
@@ -172,7 +173,7 @@ int main(int argc, char ** argv) {
 
 	uWS::Hub h;
 	MPC mpc;
-	const double Lf = mpc.getLf();
+	constexpr double Lf = MPC::Lf;
 
 	h.onMessage(
 			[&mpc, &latency, &Lf](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
