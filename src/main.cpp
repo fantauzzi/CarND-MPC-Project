@@ -154,16 +154,20 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
 }
 
 void paramsErrorAndExit() {
-	cout << "Usage: mpd [latency]" << endl << "   [latency] an integer number giving the latency time in milliseconds. Defaults to 100." << endl;
+	cout << "Usage: mpd [latency]" << endl
+			<< "   [latency] an integer number giving the latency time in milliseconds. Defaults to 100."
+			<< endl;
 	exit(-1);
 }
 
 int main(int argc, char ** argv) {
 	// Copy command line parameters into vector `args`, args[0] being the executable
 	vector<string> args(argv, argv + argc);
-	if (args.size()!=1 && args.size()!=2) paramsErrorAndExit();
-	const int latency { (args.size()==2)?  std::stoi(args[1]): 100 }; // Latency in milliseconds
-	if (latency<0) paramsErrorAndExit();
+	if (args.size() != 1 && args.size() != 2)
+		paramsErrorAndExit();
+	const int latency { (args.size() == 2) ? std::stoi(args[1]) : 100 }; // Latency in milliseconds
+	if (latency < 0)
+		paramsErrorAndExit();
 	cout << "Running with a latency of " << latency << " milliseconds." << endl;
 
 	uWS::Hub h;
@@ -186,68 +190,59 @@ int main(int argc, char ** argv) {
 							// j[1] is the data JSON object
 							vector<double> ptsx = j[1]["ptsx"];
 							vector<double> ptsy = j[1]["ptsy"];
-							const double px = j[1]["x"];// In meters
-							const double py = j[1]["y"];// In meters
-							const double psi = j[1]["psi"];// In radians
-							const double v = j[1]["speed"];// In miles per hour (mph)
-							const double steeringAngle = j[1]["steering_angle"];// In [-1, 1], corresponding to [-25deg, 25deg]
+							const double px = j[1]["x"];  // In meters
+							const double py = j[1]["y"];  // In meters
+							const double psi = j[1]["psi"];  // In radians
+							const double v = j[1]["speed"];  // In miles per hour (mph)
+							const double steeringAngle = j[1]["steering_angle"];  // In [-1, 1], corresponding to [-25deg, 25deg]
 
 							// Convert steering angle from [-1, 1], as received from the simulator, to radians
 							const double steeringAngleRad=deg2rad(25*steeringAngle);
 
-							// Convert speed from mph to meters/second (International System of Units)
-							const double vISU=v*mph2ISU;
-
 							/*
-							 * Predict the car poise at the end of the latency time interval. Approximate
-							 * the prediction by assuming that the car speed and steering angle are constant
-							 * during the time interval.
-							 */
-							const auto pxPred = px+vISU*latency/1000.*cos(psi);
-							const auto pyPred = py+vISU*latency/1000.*sin(psi);
-							const auto psiPred = psi+(v/Lf)*steeringAngleRad*latency/1000.;
-
-							/*
-							 * Convert the waypoints (received from the simulator) to the car reference system, as
-							 * predicted at the end of the latency time interval: origin on the predicted car position and x axis along
-							 * the predicted camera yaw (heading).
+							 * Convert the waypoints (received from the simulator) to the car reference system: origin on the
+							 * car position and x axis along the camera yaw (heading). In the new reference system, the
+							 * car poise has coordinates (0, 0, 0).
 							 */
 							for (auto i=0u; i<ptsx.size(); ++i) {
-								auto transformed = getInNewRefSystem(ptsx[i], ptsy[i], pxPred, pyPred, psiPred);
+								auto transformed = getInNewRefSystem(ptsx[i], ptsy[i], px, py, psi);
 								ptsx[i]=transformed.first;
 								ptsy[i]=transformed.second;
 							}
 
 							/*
-							 * Interpolate the waypoints (in the predicted car reference system) with a cubic,
+							 * Interpolate the waypoints (in the car reference system) with a cubic,
 							 * and get the coefficients of the result.
 							 */
 							Eigen::Map<Eigen::VectorXd> xWaypoints(&ptsx[0], ptsx.size());
 							Eigen::Map<Eigen::VectorXd> yWaypoints(&ptsy[0], ptsy.size());
 							const auto coeffs = polyfit(xWaypoints, yWaypoints, 3);
 
-							/* TODO Check this, probably wrong!!!
-							 * Predict errors in the predicted car reference system
+							/*
+							 * Calculate errors in car reference system
 							 */
 							const auto cte = polyeval(coeffs, 0); // Approximation, but good enough
-							const auto epsy = -atan(coeffs[1]);// Complete formula below for reference
-							// auto epsy = psiPred-atan(coeffs[1]+2*pxPred*coeffs[2]+3*coeffs[3]*pow(pxPred,2)); TODO remove this, misleading!
+							const auto epsy = -atan(coeffs[1]);
 
 							/*
-							 * Determine the current car state vector (i.e. at the beginning of the latency time
-							 * interval), expressed in the predicted car reference system.
+							 * Determine the car state as predicted at the end of the latency time interval.
+							 * It is expressed in the reference system of the current car poise (i.e. at
+							 * the beginning of the latency time interval); same reference system waypoints
+							 * have been converted to).
 							 */
-							auto transfPoise = getInNewRefSystem(px, py, psi, pxPred, pyPred, psiPred);
-							auto xTransf = std::get<0>(transfPoise);
-							auto yTransf = std::get<1>(transfPoise);
-							auto psiTransf = std::get<2>(transfPoise);
-							Eigen::VectorXd state {6};
-							// v below doesn't need to be transformed because assumed constant during the latency time interval
-							state << xTransf, yTransf, psiTransf, v, cte, epsy;
-							// cout << xTransf << ", " << yTransf << ", " << psiTransf << ", "  << cte << ", " << epsy << endl;
+							const double vISU=v*mph2ISU;  // Convert speed from mph to meters/second (International System of Units)
+							const auto pxPred = vISU*latency/1000;  // To keep the position in meters, need to use the velocity in meters/second
+							const auto pyPred = 0;
+							const auto psiPred = -(v/Lf)*steeringAngleRad*latency/1000.;  // Assuming constant steering angle
+							const auto vPred = v; // Assuming no acceleration, for simplification
+							const auto ctePred = cte+v*sin(epsy)*latency/1000.;
+							const auto epsyPred = epsy+psiPred;
+
+							Eigen::VectorXd state {6};  // The vector to hold the predicted car state
+							state << pxPred, pyPred, psiPred, vPred, ctePred, epsyPred;
 
 							// Run the optimisation given the state vector and polynomial interpolation coefficients
-							auto optResult = mpc.Solve(state, coeffs);
+							auto optResult = mpc.Solve(state, coeffs);  // Note that state[3] is in mph
 
 							/*
 							 * Fill in information for the simulator to draw the polynomial interpolating
@@ -268,8 +263,8 @@ int main(int argc, char ** argv) {
 							 * the predicted car position as the first point.
 							 */
 							// Predicted and optimised trajectory
-							vector<double> x {xTransf};
-							vector<double> y {yTransf};
+							vector<double> x {pxPred};
+							vector<double> y {pyPred};
 							for (auto i=2u; i<optResult.size(); ++i) {
 								if (i%2==0) x.push_back(optResult[i]);
 								else y.push_back(optResult[i]);
@@ -284,7 +279,7 @@ int main(int argc, char ** argv) {
 							msgJson["throttle"] = throttleValue;
 
 							/*
-							 * The simulator expects points in the predicted vehicle's coordinate system
+							 * The simulator expects points in the vehicle's coordinates system
 							 */
 							msgJson["mpc_x"] = x;
 							msgJson["mpc_y"] = y;
