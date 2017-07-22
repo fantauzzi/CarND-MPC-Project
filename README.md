@@ -5,12 +5,16 @@
 [//]: # (Image References)
 
 [image1]: MPC_clip.gif "MPC clip"
-[image2]: readme_pics/kinematic.gif "Kinematic"
-[image3]: readme_pics/kinematic_large.gif "Kinematic"
-[image4]: readme_pics/kinematic_9_150.gif "Kinematic"
-[image5]: readme_pics/kinematic_5_200.gif "Kinematic"
-[image6]: readme_pics/kinematic_9_200.gif "Kinematic"
-[image7]: readme_pics/kinematic_9_150_w.gif "Kinematic"
+[image2]: readme_pics/variables.gif "Kinematic"
+[image3]: readme_pics/kinematic_9_150.gif "Kinematic"
+[image4]: readme_pics/actuators.gif "Kinematic"
+[image5]: readme_pics/error1.gif "Kinematic"
+[image6]: readme_pics/error2.gif "Kinematic"
+[image7]: readme_pics/error3.gif "Kinematic"
+[image8]: readme_pics/constraints.gif "Kinematic"
+[image9]: readme_pics/var_latency.gif "Kinematic"
+[image10]: readme_pics/kinematic_latency.gif "Kinematic"
+[image11]: readme_pics/veering.png "Kinematic"
 
 In this project I implemented a Model Predictive Control (MPC) that drives a car around a track in Udacity's drive simulator. 
 
@@ -88,25 +92,10 @@ At the heart of any MPC there is a process model. In this case, a kinematic mode
 The model I adopted assumes the car moves on a level plane, and describes the state of the car at time `t` as a six components vector:
 
 [comment]: <> "(
-\\x_{t=1} = x_t+v_tcos(\psi_t)\Delta_t \\
-y_{t+1} = y_t+v_t*sin(\psi_t) \\
-\psi_{t+1} = psi_t + \frac{v_t}{L_f}\delta_t\Delta_t \\
-v_{t+1} = v_t+a_t\Delta_t \\
-cte_{t+1}=f(x_t)-y_t+v_tsin(\psi e_t)\Delta_t \\
-\psi e_{t+1} = \psi_t-\psi des_t+\frac{v_t}{L_f}\delta_t\Delta_t
+(x_t, y_t, v_t, \psi_t, cte_t, \psi e_t)
 )"
 
 ![MPC in simulator clip][image2]
-
-![MPC in simulator clip][image3]
-
-![MPC in simulator clip][image4]
-
-![MPC in simulator clip][image5]
-
-![MPC in simulator clip][image6]
-
-![MPC in simulator clip][image7]
 
 they are:
 * `x` the x car position (referred to its center of gravity);
@@ -122,15 +111,28 @@ The **cross-track error** is distance of the car (its center of gravity) from th
 
 Given a state at time `t`, the kinematic model computes the state at a future time `t+1` as follows:
 
-??? formula here
+[comment]: <> "(
+\\x_{t=1} = x_t+v_tcos(\psi_t)\Delta_t \\
+y_{t+1} = y_t+v_t*sin(\psi_t) \\
+\psi_{t+1} = psi_t + \frac{v_t}{L_f}\delta_t\Delta_t \\
+v_{t+1} = v_t+a_t\Delta_t \\
+cte_{t+1}=f(x_t)-y_t+v_tsin(\psi e_t)\Delta_t \\
+\psi e_{t+1} = \psi_t-\psi des_t+\frac{v_t}{L_f}\delta_t\Delta_t
+)"
+
+![MPC in simulator clip][image3]
 
 The model is approximate. It neglects forces acting on the vehicle that a *dynamic* model could consider. Also, it assumes that acceleration and yaw rate are constant between time `t` and time `t+1`. Further below I report the kinematic model used to handle actuators latency, which is further simplified.
  
  At every discrete time step `t`, the MPC determines a set of values for the actuators. They are
- 
- ??? formula here
- 
- where ` δ` is the steering angle, and `a` is the accelarator value if positive, the breaks value if negative. It is assumed one cannot accelerate and break at the same time.
+
+[comment]: <> "( 
+ (\delta_t, a_t) \text{ for } t=1,...,N-1
+)"
+
+![Image][image4]
+
+ where ` δ` is the steering angle in radians, and `a` is the accelarator/breaks value, positive for the accelerator and negative for the brakes. It is assumed one cannot accelerate and break at the same time.
  
 The simulator provides poise estimates and sensor readings at every time step `t`:
 * the current car position`(x, y)`;
@@ -143,26 +145,44 @@ Unfortunately the simulator doesn't report the acceleration, which may be inferr
 
 My MPC implementation interpolates the waypoints with a cubic polynomial, and  tries to direct the car to follow it. 
 
-At time `t` the MPC determines the optimum sequence of actuator values to be applied at time `t, t+1, ..., t+N-1`, see ??? ref here; the identified `N-1` time intervals are of constant duration `Δt`. Only optimum values for time `t` are applied. When the MPC receives another set of measurements from the simulator, and an updated list of waypoints, it resets `t` at that time, and computes yet an optimum sequence of actuator values.
+At time `t` the MPC determines the optimum sequence of actuator values to be applied at time `t, t+1, ..., t+N-1`; the identified `N-1` time intervals are of constant duration `Δt`. Only optimum values for time `t` are applied. When the MPC receives another set of measurements from the simulator, and an updated list of waypoints, it resets `t` at that time, and computes yet an optimum sequence of actuator values.
     
 To finding the optimum actuator values the MPC solves an optimisation problem, given by a cost function, the kinematic model at time steps `t, t+1, ..., t+N-1` and the constraints detailed below. The cost function has the following addends:
 
-??? formula here
+[comment]: <> "( 
+\sum_{t=0}^{N-1}(w_1cte_t^2+w_2\psi e_t^2) 
+)"
+
+![Image][image5]
 
 to reward driving close to the waypoints and the desired yaw angle;
+[comment]: <> "( 
+\sum_{t=0}^{N-1}w_3(v_t-v_{ref})^2
+)"
 
-??? formula
+![Image][image6]
 
 to ensure the car keeps moving, trying to attain the target speed
 
-??? formula
+[comment]: <> "( 
+\sum_{t=0}^{N-2}(w_4\delta_t^2+w_5a_t^2)+\sum_{t=0}^{N-3}w_6(\delta_{t+1}-\delta_t)^2+w_7(a_{t+1}-a_t)^2
+)"
+
+![Image][image7]
 
 to penalise action by the actuators, and to limit changes in actions between 
-adjacient time intervals, for a more comfortable drive and to prevent loosing control of the car.
+adjacient time intervals, for a more comfortable drive and to prevent loosing control of the vehicle.
 
-Actuators have limitation on the values they can apply, as modeled by the constraints:
+Actuators have limitation on the values they can apply, as modeled by constraints:
+
+[comment]: <> "( 
+\\ \delta_t\in[-25^{\circ}, 25^\circ]\\
+a_t\in [-1,1]
+)"
    
-??? formula
+![Image][image8]
+
+for `t=0, 1, ..., N-1`.
 
 ## Polynomial Fitting and MPC Pre-Processing
 
@@ -176,22 +196,40 @@ My program introduces a user-defined delay before sending the simulator the opti
 
 An MPC, differently from a simple PID controller, is well equipped to handle latency, by incorporating it into the process model. My implementation predicts, at time `t`, what the car state will be at the end of the latency time; the predicted state vector is:
 
-??? formula
+[comment]: <> "( 
+(x_t', y_t', v_t', \psi_t', cte_t', \psi e_t')
+)"
 
-Because the state is expressed in the car reference system at time `t`, the kinematic model gives the simplified state udpate equations:
+![Image][image9]
 
-The equations are further simplified by assuming that the car speed remains constant during the latency time, i.e. `a` is 0. This is of course an approximation, and the result is robust enough to to drive the car reliably around the track with a latency of up to 180 ms. Results vary depending on the performance and load of the computer running my program and the simulator, because they impact the controller response time, and potentially introduce further latency. 
+Expressing the state in the car reference system at time `t`, and assuming constant velocity during the latency time, the kinematic model gives the simplified state udpate equations:
+
+[comment]: <> "( 
+\\x_t'=v_tl\\
+y_t'=y_t\\
+\psi_t'=-\frac{v_t}{L_f}\delta_tl\\
+v_t'=v_t\\
+cte_t'=cte_t+v_tsin(\psi e_t)l\\
+\psi e_t'=\psi e_t+\psi_t'
+)"
+
+![Image][image10]
+
+where `l` is the latency time.
+
+Assuming constant velocity during latency, that is `a` is 0, yields an approximation, and the result is robust enough to to drive the car reliably around the track with a latency of up to 180 ms. Results vary depending on the performance and load of the computer running my program and the simulator, because they impact the controller response time, and potentially introduce further latency. 
 
 ## Parameters Tuning
 
-Running the MPC implementation fist requires tuning: 
-* `N`, the number of time-step in the finite-horizon optimisation;
-* `Δt`, the time intervening between two consecutive time-steps, taken constant in this implementation;
+Implementing the MPC I had to choose: 
+* `N`, the number of time-steps in the finite-horizon optimisation;
+* `Δt`, the time intervening between two consecutive time-steps, taken constant.
  
-Product `NΔt` gives the overall time, starting from `t`, during which the controller predicts and optimises the car trajectory. A too small `NΔt` doesn't allow the car to stay on track, as the controller doesn't look ahead enough; a too large one makes the computation heavier and doesn't bring actual benefits, as the model is approximate and its prediction accuracy degrades the more it goes into the future.
+Product `NΔt` gives the overall time, starting from `t=0`, during which the controller predicts and optimises the car trajectory. A too small `NΔt` doesn't allow the car to stay on track, as the controller doesn't look ahead enough; a too large one makes the computation heavier and doesn't bring actual benefits, as the model is approximate and its prediction accuracy degrades the more it goes into the future.
   
-A small `Δt` would be desirable for more frequent, and therefore more accurate, optimisations. However, with a latency time of 100ms, I observed that setting `Δt` to 12 ms or lower makes the car behave erratically and go off-track, with a sweet spot around 13 ms.
+A small `Δt` would be desirable for more frequent, and therefore more accurate, calculation of actuator values. However, with a latency time of 100ms, I observed that setting `Δt` to 120 ms or lower makes the car behave erratically and go off-track, with a sweet spot around 130 ms.
   
-I set `N` to 11 as the smallest value that gave me a smooth ride and a predicted trajectory subjectively close to the cubic interpolating the waypoints. A value smaller than 11 gives a predicted trajectory that often veers off visibly at its end, see picture below.
+Once set `Δt` to 130 ms, I set `N` to 11 as the smallest value that gave me a predicted trajectory subjectively close to the waypoints interpolation. A value smaller than 11 gives a predicted trajectory that often veers off visibly at its end: see picture below, for `N=9` and `Δt=13 ms` .
 
-??? pic here
+![Image][image11]
+

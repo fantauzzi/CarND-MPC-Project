@@ -7,7 +7,7 @@ using CppAD::AD;
 
 class MPC {
 	static constexpr size_t N = 11; // Number of time steps to be used in the optimisation
-	static constexpr double dt = .13; // Number of time steps to be used in the optimisation
+	static constexpr double dt = .13; // Time interval in seconds between optimisation steps
 
 	static constexpr double refCte { 0 };
 	static constexpr double refEpsi { 0 };
