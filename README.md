@@ -4,7 +4,7 @@
 ---
 [//]: # (Image References)
 
-[image1]: MPC_clip.gif "MPC clip"
+[image1]: readme_pics/MPC_clip.gif "MPC clip"
 [image2]: readme_pics/variables.gif "Kinematic"
 [image3]: readme_pics/kinematic_9_150.gif "Kinematic"
 [image4]: readme_pics/actuators.gif "Kinematic"
@@ -89,7 +89,7 @@ Start the simulator, choose "Project 5: MPC Controller" from its start screen, a
 
 At the heart of any MPC there is a process model. In this case, a kinematic model, describing and anticipating how the car moves based on its actuators (steering wheel, accelerator and brakes).
 
-The model I adopted assumes the car moves on a level plane, and describes the state of the car at time `t` as a six components vector:
+The model I adopted assumes the car moves on a level plane, and describes the state of the car at time `t` with a six components vector:
 
 [comment]: <> "(
 (x_t, y_t, v_t, \psi_t, cte_t, \psi e_t)
@@ -107,21 +107,42 @@ they are:
 
 The MPC determines an optimal path for the car, over a finite time horizon, and the model includes measures of error, i.e. how far the car is from the computed optimal path.
 
-The **cross-track error** is distance of the car (its center of gravity) from the wanted (optimal) position; the **yaw error** is the angular distance of the car yaw from the wanted (optimal) yaw. They are included in the car state to set-up the optimisation problem the MPC solves.
+The **cross-track error** is the car distance from the wanted (optimal) position; the **yaw error** is the angular distance of the car yaw from the wanted (optimal) yaw. They are included in the car state to set-up the optimisation problem the MPC solves.
 
-Given a state at time `t`, the kinematic model computes the state at a future time `t+1` as follows:
+The simulator provides poise estimates and sensor readings at every time step `t`:
+* the current car position`(x, y)`;
+* the yaw angle `ψ`;
+* the velocity `v`; 
+* the steering angle, between 0 and 25 degrees on either side;
+* the current throttle/break value `a`, between -1 and 1.
+
+It also provides a list of waypoints that define the planned car route.
+
+Unfortunately the simulator doesn't report the acceleration, which may be inferred with approximation from the throttle/break value.
+
+My MPC implementation interpolates the waypoints with a cubic polynomial, and  tries to direct the car to follow it. 
+
+
+Given a state at time `t`, the kinematic model computes the state at time `t+1` as follows:
 
 [comment]: <> "(
-\\x_{t=1} = x_t+v_tcos(\psi_t)\Delta_t \\
-y_{t+1} = y_t+v_t*sin(\psi_t) \\
-\psi_{t+1} = psi_t + \frac{v_t}{L_f}\delta_t\Delta_t \\
+\\x_{t+1} = x_t+v_tcos(\psi_t)\Delta_t \\
+y_{t+1} = y_t+v_tsin(\psi_t) \\
+\psi_{t+1} = \psi_t + \frac{v_t}{L_f}\delta_t\Delta_t \\
 v_{t+1} = v_t+a_t\Delta_t \\
 cte_{t+1}=f(x_t)-y_t+v_tsin(\psi e_t)\Delta_t \\
 \psi e_{t+1} = \psi_t-\psi des_t+\frac{v_t}{L_f}\delta_t\Delta_t
 )"
-
+ 
 ![MPC in simulator clip][image3]
 
+where:
+ * `Δt` is the duration of the time interval between `t` and `t+1`;
+ * `Lf` is a constant determined experimentally and provided by the simulator developer;
+ * `a` is the acceleration, approximated by the throttle/breaks value that the simulator provides;
+ * `ψdes` is the desired yaw angle;
+ * `f()` is the polynomial interpolation of the waypoints.
+ 
 The model is approximate. It neglects forces acting on the vehicle that a *dynamic* model could consider. Also, it assumes that acceleration and yaw rate are constant between time `t` and time `t+1`. Further below I report the kinematic model used to handle actuators latency, which is further simplified.
  
  At every discrete time step `t`, the MPC determines a set of values for the actuators. They are
@@ -133,21 +154,10 @@ The model is approximate. It neglects forces acting on the vehicle that a *dynam
 ![Image][image4]
 
  where ` δ` is the steering angle in radians, and `a` is the accelarator/breaks value, positive for the accelerator and negative for the brakes. It is assumed one cannot accelerate and break at the same time.
- 
-The simulator provides poise estimates and sensor readings at every time step `t`:
-* the current car position`(x, y)`;
-* the yaw angle `ψ`;
-* the velocity `v`; 
-* the steering angle, between 0 and 25 degrees on either side;
-* the current throttle/break value, between -1 and 1.
-
-Unfortunately the simulator doesn't report the acceleration, which may be inferred with approximation from the throttle/break value.
-
-My MPC implementation interpolates the waypoints with a cubic polynomial, and  tries to direct the car to follow it. 
 
 At time `t` the MPC determines the optimum sequence of actuator values to be applied at time `t, t+1, ..., t+N-1`; the identified `N-1` time intervals are of constant duration `Δt`. Only optimum values for time `t` are applied. When the MPC receives another set of measurements from the simulator, and an updated list of waypoints, it resets `t` at that time, and computes yet an optimum sequence of actuator values.
     
-To finding the optimum actuator values the MPC solves an optimisation problem, given by a cost function, the kinematic model at time steps `t, t+1, ..., t+N-1` and the constraints detailed below. The cost function has the following addends:
+To find the optimum actuator values the MPC solves an optimisation problem, given by a cost function, the kinematic model at time steps `t, t+1, ..., t+N-1` and the constraints detailed below. The cost function has the following addends:
 
 [comment]: <> "( 
 \sum_{t=0}^{N-1}(w_1cte_t^2+w_2\psi e_t^2) 
@@ -156,6 +166,7 @@ To finding the optimum actuator values the MPC solves an optimisation problem, g
 ![Image][image5]
 
 to reward driving close to the waypoints and the desired yaw angle;
+
 [comment]: <> "( 
 \sum_{t=0}^{N-1}w_3(v_t-v_{ref})^2
 )"
@@ -165,15 +176,16 @@ to reward driving close to the waypoints and the desired yaw angle;
 to ensure the car keeps moving, trying to attain the target speed
 
 [comment]: <> "( 
-\sum_{t=0}^{N-2}(w_4\delta_t^2+w_5a_t^2)+\sum_{t=0}^{N-3}w_6(\delta_{t+1}-\delta_t)^2+w_7(a_{t+1}-a_t)^2
+\sum_{t=0}^{N-2}(w_4\delta_t^2+w_5a_t^2)+\sum_{t=0}^{N-3}[w_6(\delta_{t+1}-\delta_t)^2+w_7(a_{t+1}-a_t)^2]
 )"
 
 ![Image][image7]
 
-to penalise action by the actuators, and to limit changes in actions between 
-adjacient time intervals, for a more comfortable drive and to prevent loosing control of the vehicle.
+to penalise action by the actuators, and to limit changes in actions between adjacient time intervals, for a more comfortable drive and to prevent loosing control of the vehicle.
 
-Actuators have limitation on the values they can apply, as modeled by constraints:
+Weights `w` allow adjusting the relative importance of the different parts contributing to the cost.
+
+Actuators have limitation on the values they can apply, modeled by constraints:
 
 [comment]: <> "( 
 \\ \delta_t\in[-25^{\circ}, 25^\circ]\\
@@ -186,9 +198,9 @@ for `t=0, 1, ..., N-1`.
 
 ## Polynomial Fitting and MPC Pre-Processing
 
-Before fitting the cubic polynomial to the waypoints, I transform them into the car reference system at time `t`. That is, a coordinates reference system with origin on the car poise, where `x=0` and `y=0` in the car center of gravity, and a yaw of 0 radians is aligned with the `x` axis. In this reference system, the car has of course coordinates `(0,0,0)`.
+Before fitting the cubic polynomial to the waypoints, I transform them into the car reference system at time `t`. That is, a coordinates reference system with origin on the car poise, where `x=0` and `y=0` in the car center of gravity, and a yaw of 0 radians is aligned with the `x` axis. In this reference system, the car has coordinates `(0,0,0)`.
 
-This allows to simplify the kinematic model, also for handling latency (se below), and allows me to send the optimisation results straight to the simulator, without further coordinates transformation. The simulator in fact expects a list of waypoints, and the predicted car positions at time `t, t+1, ..., t+N-1`, in the car reference system (at time `t`). 
+This simplifies the kinematic model, also for handling latency (se below), and allows me to send the optimisation results to the simulator without further coordinates transformation. The simulator in fact expects a list of waypoints, and the predicted car positions at time `t, t+1, ..., t+N-1`, in the car reference system (at time `t`). 
 
 ## MPC with Latency
 
@@ -202,7 +214,7 @@ An MPC, differently from a simple PID controller, is well equipped to handle lat
 
 ![Image][image9]
 
-Expressing the state in the car reference system at time `t`, and assuming constant velocity during the latency time, the kinematic model gives the simplified state udpate equations:
+Expressing the state in the car reference system at time `t`, and **assuming constant velocity during the latency time**, the kinematic model gives the simplified state udpate equations:
 
 [comment]: <> "( 
 \\x_t'=v_tl\\
@@ -225,9 +237,9 @@ Implementing the MPC I had to choose:
 * `N`, the number of time-steps in the finite-horizon optimisation;
 * `Δt`, the time intervening between two consecutive time-steps, taken constant.
  
-Product `NΔt` gives the overall time, starting from `t=0`, during which the controller predicts and optimises the car trajectory. A too small `NΔt` doesn't allow the car to stay on track, as the controller doesn't look ahead enough; a too large one makes the computation heavier and doesn't bring actual benefits, as the model is approximate and its prediction accuracy degrades the more it goes into the future.
+Product `NΔt` gives the overall time, starting from `t=0`, for which the controller predicts and optimises the car trajectory. A too small `NΔt` doesn't allow the car to stay on track, as the controller doesn't look ahead enough; a too large one makes the computation heavier and doesn't bring actual benefits, as the model is approximate and its prediction accuracy degrades the more it goes into the future.
   
-A small `Δt` would be desirable for more frequent, and therefore more accurate, calculation of actuator values. However, with a latency time of 100ms, I observed that setting `Δt` to 120 ms or lower makes the car behave erratically and go off-track, with a sweet spot around 130 ms.
+A small `Δt` would be desirable for more frequent, and therefore more accurate, calculation of actuator values. However, with a latency time of 100 ms, I observed that setting `Δt` to 120 ms or lower makes the car behave erratically and go off-track, with a sweet spot around 130 ms.
   
 Once set `Δt` to 130 ms, I set `N` to 11 as the smallest value that gave me a predicted trajectory subjectively close to the waypoints interpolation. A value smaller than 11 gives a predicted trajectory that often veers off visibly at its end: see picture below, for `N=9` and `Δt=13 ms` .
 
