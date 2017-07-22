@@ -98,16 +98,14 @@ The model I adopted assumes the car moves on a level plane, and describes the st
 ![MPC in simulator clip][image2]
 
 they are:
-* `x` the x car position (referred to its center of gravity);
-* `y` the y car position;
+* `x` the car x position (referred to its center of gravity);
+* `y` the car y position;
 * `v` the car velocity;
 * `ψ​` the car yaw (or heading), angle between the `x` axis and the car heading, positive when taken counter-clockwise;
 * `cte` the cross-track error;
 * `ψe` the yaw error.
 
-The MPC determines an optimal path for the car, over a finite time horizon, and the model includes measures of error, i.e. how far the car is from the computed optimal path.
-
-The **cross-track error** is the car distance from the wanted (optimal) position; the **yaw error** is the angular distance of the car yaw from the wanted (optimal) yaw. They are included in the car state to set-up the optimisation problem the MPC solves.
+The MPC determines an optimal path for the car, over a finite time horizon, and the model includes measures of error, i.e. how far the car is from the path identified by waypoints. More on this below.
 
 The simulator provides poise estimates and sensor readings at every time step `t`:
 * the current car position`(x, y)`;
@@ -118,10 +116,11 @@ The simulator provides poise estimates and sensor readings at every time step `t
 
 It also provides a list of waypoints that define the planned car route.
 
+My MPC implementation interpolates the waypoints with a cubic polynomial, and directs the car to try to follow it. 
+
+The **cross-track error** `cte` is the car distance from the interpolating polynomial; the **yaw error** `ψe` is the angular distance of the car yaw from the yaw the car would have along the polynomial. They are included in the car state to set-up the optimisation problem the MPC solves.
+
 Unfortunately the simulator doesn't report the acceleration, which may be inferred with approximation from the throttle/break value.
-
-My MPC implementation interpolates the waypoints with a cubic polynomial, and  tries to direct the car to follow it. 
-
 
 Given a state at time `t`, the kinematic model computes the state at time `t+1` as follows:
 
